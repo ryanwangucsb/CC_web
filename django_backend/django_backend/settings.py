@@ -1,10 +1,14 @@
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-SECRET_KEY = 'replace-this-with-a-secure-key'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'replace-this-with-a-secure-key')
 
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
 ALLOWED_HOSTS = []
 
@@ -60,6 +64,12 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = []
 
+# Custom authentication backends
+AUTHENTICATION_BACKENDS = [
+    'api.supabase_auth.SupabaseAuthBackend',
+    'django.contrib.auth.backends.ModelBackend',  # Fallback to Django's default
+]
+
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'UTC'
@@ -79,5 +89,17 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
+# Add EC2 IP/domain for testing (you can add more here)
+CORS_ALLOWED_ORIGINS.extend([
+    # Add your EC2 IP here when you have it
+    # "http://your-ec2-ip:5173",
+    # "http://your-ec2-domain:5173",
+])
+
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = False
+
+# Supabase settings
+SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://ueyfoyrcjlrlmmzbonok.supabase.co')
+SUPABASE_ANON_KEY = os.environ.get('SUPABASE_ANON_KEY')

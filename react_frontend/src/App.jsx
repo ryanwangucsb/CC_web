@@ -1,5 +1,6 @@
 import React, { useState, useEffect, createContext, useContext, useReducer } from 'react';
 import { API_ENDPOINTS } from './config.js';
+import { supabase } from './supabaseClient.js';
 
 // Context and Reducer
 const AppContext = createContext();
@@ -25,6 +26,8 @@ const cartReducer = (state, action) => {
       return { ...state, user: action.payload };
     case 'CLEAR_CART':
       return { ...state, cart: [] };
+    case 'SET_CART':
+      return { ...state, cart: action.payload };
     case 'SET_ORDERS':
       return { ...state, orders: action.payload };
     default:
@@ -37,7 +40,8 @@ const Navigation = () => {
   const { state, dispatch } = useContext(AppContext);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     dispatch({ type: 'SET_USER', payload: null });
   };
 
@@ -80,9 +84,7 @@ const Navigation = () => {
                 </span>
               )}
             </button>
-            {/* Temporarily disable authentication */}
-            <span className="text-gray-500 px-3 py-2 text-sm">Demo Mode</span>
-            {/* {state.user ? (
+            {state.user ? (
               <>
                 <a href="#orders" className="text-gray-700 hover:text-green-600 px-3 py-2 text-sm font-medium transition-colors">Orders</a>
                 <button 
@@ -96,7 +98,7 @@ const Navigation = () => {
               <a href="#login" className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors">
                 Login
               </a>
-            )} */}
+            )}
           </div>
 
           <div className="md:hidden flex items-center">
@@ -139,9 +141,7 @@ const Navigation = () => {
                 </span>
               )}
             </button>
-            {/* Temporarily disable authentication in mobile menu */}
-            <span className="block px-3 py-2 text-gray-500">Demo Mode</span>
-            {/* {state.user ? (
+            {state.user ? (
               <>
                 <a href="#orders" className="block px-3 py-2 text-gray-700 hover:text-green-600">Orders</a>
                 <button 
@@ -155,7 +155,7 @@ const Navigation = () => {
               <a href="#login" className="block px-3 py-2 text-gray-700 hover:text-green-600">
                 Login
               </a>
-            )} */}
+            )}
           </div>
         </div>
       )}
@@ -249,9 +249,48 @@ const ProductGrid = () => {
     return matchesSearch && matchesCategory;
   });
 
-  const handleAddToCart = (product) => {
-    if (product.stock_quantity > 0) {
-      dispatch({ type: 'ADD_TO_CART', payload: product });
+  const handleAddToCart = async (product) => {
+    if (product.stock_quantity > 0 && state.user) {
+      try {
+        // Check if item already exists in cart
+        const existingItem = state.cart.find(item => item.id === product.id);
+        
+        if (existingItem) {
+          // Update quantity in Supabase
+          const { error } = await supabase
+            .from('cart_items')
+            .update({ quantity: existingItem.quantity + 1 })
+            .eq('user_id', state.user.id)
+            .eq('product_id', product.id);
+          
+          if (error) {
+            console.error('Error updating cart:', error);
+            return;
+          }
+          
+          // Update local state
+          dispatch({ type: 'UPDATE_QUANTITY', payload: { id: product.id, quantity: existingItem.quantity + 1 } });
+        } else {
+          // Add new item to Supabase
+          const { error } = await supabase
+            .from('cart_items')
+            .insert({
+              user_id: state.user.id,
+              product_id: product.id,
+              quantity: 1
+            });
+          
+          if (error) {
+            console.error('Error adding to cart:', error);
+            return;
+          }
+          
+          // Add to local state
+          dispatch({ type: 'ADD_TO_CART', payload: product });
+        }
+      } catch (err) {
+        console.error('Error adding to cart:', err);
+      }
     }
   };
 
@@ -327,16 +366,132 @@ const ProductGrid = () => {
 const Cart = () => {
   const { state, dispatch } = useContext(AppContext);
   const [isCheckout, setIsCheckout] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  // Load cart from Supabase when component mounts (only if user is logged in)
+  useEffect(() => {
+    if (state.user && state.cart.length === 0) {
+      const loadCart = async () => {
+        setLoading(true);
+        try {
+          // First get cart items from Supabase
+          const { data: cartData, error: cartError } = await supabase
+            .from('cart_items')
+            .select('*')
+            .eq('user_id', state.user.id);
+
+          if (cartError) {
+            console.error('Error loading cart:', cartError);
+            return;
+          }
+
+          if (cartData && cartData.length > 0) {
+            // Get product details from Django backend for each cart item
+            const cartItems = await Promise.all(
+              cartData.map(async (cartItem) => {
+                try {
+                  const response = await fetch(`${API_ENDPOINTS.PRODUCTS}${cartItem.product_id}/`);
+                  if (response.ok) {
+                    const product = await response.json();
+                    return {
+                      id: product.id,
+                      title: product.name,
+                      description: product.description,
+                      price: parseFloat(product.price),
+                      image: product.image,
+                      stock_quantity: product.stock_quantity,
+                      quantity: cartItem.quantity
+                    };
+                  }
+                } catch (err) {
+                  console.error('Error fetching product:', err);
+                  return null;
+                }
+              })
+            );
+
+            // Filter out any failed product fetches and remove duplicates
+            const validItems = cartItems.filter(item => item !== null);
+            const uniqueItems = validItems.filter((item, index, self) => 
+              index === self.findIndex(t => t.id === item.id)
+            );
+            
+            if (uniqueItems.length > 0) {
+              dispatch({ type: 'SET_CART', payload: uniqueItems });
+            }
+          }
+        } catch (err) {
+          console.error('Error loading cart:', err);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      loadCart();
+    }
+  }, [state.user, dispatch, state.cart.length]);
+
+  // Redirect to login if user is not authenticated
+  if (!state.user) {
+    return (
+      <div className="py-16 bg-gray-50">
+        <div className="max-w-md mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="bg-white rounded-xl shadow-lg p-12">
+            <div className="text-gray-400 mb-6">
+              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-1.5 6M7 13l-1.5 6m0 0h9" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-800 mb-4">Login Required</h3>
+            <p className="text-gray-600 mb-8">Please log in to view your cart and make purchases.</p>
+            <a href="#login" className="bg-green-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors">
+              Login Now
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const total = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-  const handleRemoveFromCart = (id) => {
-    dispatch({ type: 'REMOVE_FROM_CART', payload: id });
+  const handleRemoveFromCart = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('cart_items')
+        .delete()
+        .eq('user_id', state.user.id)
+        .eq('product_id', id);
+      
+      if (error) {
+        console.error('Error removing from cart:', error);
+        return;
+      }
+      
+      dispatch({ type: 'REMOVE_FROM_CART', payload: id });
+    } catch (err) {
+      console.error('Error removing from cart:', err);
+    }
   };
 
-  const handleUpdateQuantity = (id, quantity) => {
+  const handleUpdateQuantity = async (id, quantity) => {
     if (quantity >= 1) {
-      dispatch({ type: 'UPDATE_QUANTITY', payload: { id, quantity } });
+      try {
+        const { error } = await supabase
+          .from('cart_items')
+          .update({ quantity })
+          .eq('user_id', state.user.id)
+          .eq('product_id', id);
+        
+        if (error) {
+          console.error('Error updating quantity:', error);
+          return;
+        }
+        
+        dispatch({ type: 'UPDATE_QUANTITY', payload: { id, quantity } });
+      } catch (err) {
+        console.error('Error updating quantity:', err);
+      }
     }
   };
 
@@ -344,34 +499,85 @@ const Cart = () => {
     setIsCheckout(true);
   };
 
-  const handlePlaceOrder = () => {
-    fetch(API_ENDPOINTS.ORDERS_CREATE, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        items: state.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
-      })
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.error) {
-          alert('Order failed: ' + data.error);
-        } else {
-          alert('Order placed successfully! Thank you for your purchase.');
-          dispatch({ type: 'CLEAR_CART' });
-          setIsCheckout(false);
-          // Optionally refresh orders
-          fetch(API_ENDPOINTS.ORDERS, { credentials: 'include', headers: { 'Accept': 'application/json' } })
+  const handlePlaceOrder = async () => {
+    try {
+      // Get the current Supabase session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        alert('Please log in to place an order');
+        return;
+      }
+
+      const response = await fetch(API_ENDPOINTS.ORDERS_CREATE, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          items: state.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
+        })
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        alert('Order failed: ' + data.error);
+      } else {
+        alert('Order placed successfully! Thank you for your purchase.');
+        
+        // Clear cart from Supabase
+        const { error } = await supabase
+          .from('cart_items')
+          .delete()
+          .eq('user_id', state.user.id);
+        
+        if (error) {
+          console.error('Error clearing cart:', error);
+        }
+        
+        // Clear local cart state
+        dispatch({ type: 'CLEAR_CART' });
+        setIsCheckout(false);
+        
+        // Optionally refresh orders
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          fetch(API_ENDPOINTS.ORDERS, { 
+            headers: { 
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            } 
+          })
             .then(res => res.json())
             .then(data => dispatch({ type: 'SET_ORDERS', payload: data }));
         }
-      })
-      .catch(() => alert('Order failed: Network error'));
+      }
+    } catch (err) {
+      console.error('Order failed:', err);
+      alert('Order failed: Network error');
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="py-16 bg-gray-50">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="bg-white rounded-xl shadow-lg p-12">
+            <div className="text-gray-400 mb-6">
+              <svg className="w-16 h-16 mx-auto animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-800 mb-4">Loading your cart...</h3>
+            <p className="text-gray-600">Please wait while we fetch your cart items.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (state.cart.length === 0) {
     return (
@@ -562,10 +768,12 @@ const Login = () => {
   const { state, dispatch } = useContext(AppContext);
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
-    username: '',
     email: '',
     password: ''
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
 
   const handleInputChange = (e) => {
     setFormData({
@@ -574,29 +782,40 @@ const Login = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Temporarily disable authentication to avoid 404 errors
-    alert('Authentication temporarily disabled. Backend endpoints not yet configured.');
-    return;
-    
-    // const url = isLogin ? API_ENDPOINTS.LOGIN : API_ENDPOINTS.REGISTER;
-    // fetch(url, {
-    //   method: 'POST',
-    //   credentials: 'include',
-    //   headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-    //   body: JSON.stringify(formData)
-    // })
-    //   .then(res => res.json())
-    //   .then(data => {
-    //     if (data.error) {
-    //       alert('Auth failed: ' + data.error);
-    //     } else {
-    //       dispatch({ type: 'SET_USER', payload: data });
-    //       alert(`Successfully ${isLogin ? 'logged in' : 'registered'} as ${formData.username}!`);
-    //     }
-    //   })
-    //   .catch(() => alert('Auth failed: Network error'));
+    setError('');
+    setSuccess('');
+    setLoading(true);
+    try {
+      if (isLogin) {
+        const { data, error: loginError } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.password
+        });
+        if (loginError) {
+          setError(loginError.message);
+        } else {
+          dispatch({ type: 'SET_USER', payload: data.user });
+          setSuccess('Successfully logged in!');
+        }
+      } else {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.password
+        });
+        if (signUpError) {
+          setError(signUpError.message);
+        } else {
+          dispatch({ type: 'SET_USER', payload: data.user });
+          setSuccess('Account created! Please check your email to confirm.');
+        }
+      }
+    } catch (err) {
+      setError('Unexpected error.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -618,34 +837,18 @@ const Login = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {!isLogin && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  required={!isLogin}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="your@email.com"
-                />
-              </div>
-            )}
-            
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
-                type="text"
-                name="username"
-                value={formData.username}
+                type="email"
+                name="email"
+                value={formData.email}
                 onChange={handleInputChange}
                 required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                placeholder="Enter your username"
+                placeholder="your@email.com"
               />
             </div>
-            
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
               <input
@@ -658,12 +861,14 @@ const Login = () => {
                 placeholder="••••••••"
               />
             </div>
-
+            {error && <div className="text-red-600 text-sm">{error}</div>}
+            {success && <div className="text-green-600 text-sm">{success}</div>}
             <button
               type="submit"
               className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
+              disabled={loading}
             >
-              {isLogin ? 'Sign In' : 'Create Account'}
+              {loading ? 'Please wait...' : isLogin ? 'Sign In' : 'Create Account'}
             </button>
           </form>
 
@@ -671,6 +876,7 @@ const Login = () => {
             <button
               onClick={() => setIsLogin(!isLogin)}
               className="text-green-600 hover:text-green-700 font-medium"
+              disabled={loading}
             >
               {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
             </button>
@@ -682,7 +888,44 @@ const Login = () => {
 };
 
 const Orders = () => {
-  const { state } = useContext(AppContext);
+  const { state, dispatch } = useContext(AppContext);
+  const [loading, setLoading] = useState(false);
+  
+  // Ensure orders is always an array
+  const orders = Array.isArray(state.orders) ? state.orders : [];
+
+  // Load orders when component mounts
+  useEffect(() => {
+    const loadOrders = async () => {
+      if (!state.user) return;
+      
+      setLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const response = await fetch(API_ENDPOINTS.ORDERS, {
+            headers: {
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`
+            }
+          });
+          
+          if (response.ok) {
+            const ordersData = await response.json();
+            dispatch({ type: 'SET_ORDERS', payload: ordersData });
+          } else {
+            console.error('Failed to fetch orders:', response.status);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading orders:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadOrders();
+  }, [state.user, dispatch]);
 
   if (!state.user) {
     return (
@@ -691,7 +934,7 @@ const Orders = () => {
           <div className="bg-white rounded-xl shadow-lg p-12">
             <div className="text-gray-400 mb-6">
               <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 00-2-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
             <h3 className="text-2xl font-bold text-gray-800 mb-4">Authentication Required</h3>
@@ -705,12 +948,30 @@ const Orders = () => {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="py-16 bg-gray-50">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <div className="bg-white rounded-xl shadow-lg p-12">
+            <div className="text-gray-400 mb-6">
+              <svg className="w-16 h-16 mx-auto animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-800 mb-4">Loading Orders...</h3>
+            <p className="text-gray-600">Please wait while we fetch your order history.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="py-16 bg-gray-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 className="text-3xl font-bold text-gray-800 mb-8">Order History</h2>
         
-        {state.orders.length === 0 ? (
+        {orders.length === 0 ? (
           <div className="bg-white rounded-xl shadow-lg p-12 text-center">
             <div className="text-gray-400 mb-4">
               <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -725,7 +986,7 @@ const Orders = () => {
           </div>
         ) : (
           <div className="space-y-6">
-            {state.orders.map(order => (
+            {orders.map(order => (
               <div key={order.id} className="bg-white rounded-xl shadow-lg p-6">
                 <div className="flex flex-col md:flex-row justify-between mb-4">
                   <div>
@@ -749,12 +1010,14 @@ const Orders = () => {
                 <div className="border-t border-gray-200 pt-4">
                   <h4 className="font-medium text-gray-800 mb-3">Items:</h4>
                   <div className="space-y-2 mb-4">
-                    {order.order_items.map(item => (
+                    {order.order_items && Array.isArray(order.order_items) ? order.order_items.map(item => (
                       <div key={item.id} className="flex justify-between text-sm">
                         <span>{item.quantity}x {item.product_name}</span>
                         <span>${(parseFloat(item.price_at_purchase) * item.quantity).toFixed(2)}</span>
                       </div>
-                    ))}
+                    )) : (
+                      <p className="text-gray-500">Order items not available</p>
+                    )}
                   </div>
                   
                   <div className="border-t pt-3 flex justify-end">
@@ -845,6 +1108,41 @@ const App = () => {
     user: null,
     orders: []
   });
+
+  // Ensure orders is always an array
+  const safeOrders = Array.isArray(state.orders) ? state.orders : [];
+
+  // Check for existing Supabase session on app load
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('Error getting session:', error);
+        } else if (session) {
+          dispatch({ type: 'SET_USER', payload: session.user });
+        }
+      } catch (err) {
+        console.error('Error checking session:', err);
+      }
+    };
+
+    checkUser();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          dispatch({ type: 'SET_USER', payload: session.user });
+        } else if (event === 'SIGNED_OUT') {
+          dispatch({ type: 'SET_USER', payload: null });
+          dispatch({ type: 'CLEAR_CART' });
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
+  }, [dispatch]);
 
   // Replace useEffect for products and orders with real API calls
   useEffect(() => {
