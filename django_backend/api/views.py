@@ -1,10 +1,42 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.authentication import BaseAuthentication
+from rest_framework.exceptions import AuthenticationFailed
 from django.contrib.auth.models import User
 from .models import products, Order, OrderItem
 from .serializers import UserSerializer, ProductSerializer, OrderSerializer, OrderItemSerializer
 from django.db import transaction # For atomic operations
+from .supabase_auth import SupabaseAuthBackend
+
+class SupabaseDRFAuthentication(BaseAuthentication):
+    """
+    Custom DRF authentication class for Supabase JWT tokens
+    """
+    
+    def authenticate(self, request):
+        # Get the Authorization header
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        
+        print(f"DEBUG: Auth header: {auth_header}")
+        
+        if not auth_header.startswith('Bearer '):
+            print("DEBUG: No Bearer token found")
+            return None
+            
+        # Extract the token
+        token = auth_header.split(' ')[1]
+        print(f"DEBUG: Token extracted: {token[:20]}...")
+        
+        # Use our custom auth backend to validate the token
+        supabase_backend = SupabaseAuthBackend()
+        user = supabase_backend.authenticate(request, token=token)
+        
+        print(f"DEBUG: User from auth: {user}")
+        
+        if user:
+            return (user, None)
+        return None
 
 # User ViewSet (for user management)
 class UserViewSet(viewsets.ModelViewSet):
@@ -29,6 +61,7 @@ class ProductViewSet(viewsets.ModelViewSet):
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()  # Add this line!
     serializer_class = OrderSerializer
+    authentication_classes = [SupabaseDRFAuthentication]
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
