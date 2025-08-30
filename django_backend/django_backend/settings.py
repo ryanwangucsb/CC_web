@@ -11,6 +11,9 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'replace-this-with-a-secure-key')
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
 ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '18.144.58.149',
 ]
 
 INSTALLED_APPS = [
