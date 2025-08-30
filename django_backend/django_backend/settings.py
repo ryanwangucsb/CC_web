@@ -10,7 +10,8 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'replace-this-with-a-secure-key')
 
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+]
 
 INSTALLED_APPS = [
     'corsheaders',
