@@ -1,8 +1,5 @@
-// Ensure we always use HTTPS for the API URL
-const rawApiUrl = import.meta.env.VITE_API_BASE_URL || 'https://wedofarm.com';
-export const API_BASE_URL = rawApiUrl.startsWith('http://') 
-  ? rawApiUrl.replace('http://', 'https://') 
-  : rawApiUrl;
+// Force the API URL to use wedofarm.com domain
+export const API_BASE_URL = 'https://wedofarm.com';
 
 export const API_ENDPOINTS = {
   PRODUCTS: `${API_BASE_URL}/api/products/`,
