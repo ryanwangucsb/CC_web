@@ -8,6 +8,10 @@ Qwen_frontend.jsx
 .env.local
 .env.production
 .env.development
+**/.env
+**/.env.local
+**/.env.production
+**/.env.development
 
 # Dependencies
 node_modules/
