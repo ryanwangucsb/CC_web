@@ -11,9 +11,12 @@ const GOOGLE_SHEETS_CONFIG = {
   SHEET_NAME_PATTERN: 'YYYY-MM'
 };
 
-// Validate required environment variables
-if (!GOOGLE_SHEETS_CONFIG.WEB_APP_URL || !GOOGLE_SHEETS_CONFIG.SHEET_ID) {
-  throw new Error('Missing Google Sheets environment variables. Please check your .env file.');
+// Check if Google Sheets is configured
+const isGoogleSheetsConfigured = GOOGLE_SHEETS_CONFIG.WEB_APP_URL && GOOGLE_SHEETS_CONFIG.SHEET_ID;
+
+// Log warning if not configured (but don't crash the app)
+if (!isGoogleSheetsConfigured) {
+  console.warn('Google Sheets integration not configured. Some features may be limited.');
 }
 
 /**
@@ -22,6 +25,11 @@ if (!GOOGLE_SHEETS_CONFIG.WEB_APP_URL || !GOOGLE_SHEETS_CONFIG.SHEET_ID) {
  * @returns {Promise<boolean>} - Success status
  */
 export const createMonthlySheet = async (monthYear) => {
+  if (!isGoogleSheetsConfigured) {
+    console.warn('Google Sheets not configured - skipping sheet creation');
+    return false;
+  }
+  
   try {
     // Use iframe form submission to completely bypass CORS
     return new Promise((resolve) => {
@@ -95,6 +103,11 @@ export const getCurrentMonth = () => {
  * @returns {Promise<Object>} - Response from Google Sheets
  */
 export const submitOrderToSheets = async (orderData) => {
+  if (!isGoogleSheetsConfigured) {
+    console.warn('Google Sheets not configured - skipping order submission to sheets');
+    return { success: false, message: 'Google Sheets integration not configured' };
+  }
+  
   try {
     const currentMonth = getCurrentMonth();
     
