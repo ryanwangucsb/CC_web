@@ -105,6 +105,12 @@ if not DEBUG:
         "https://www.wedofarm.com",
     ])
 
+# Allow Vercel domains (wildcard pattern)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
+    r"^https://.*\.vercel\.dev$",
+]
+
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = False
 

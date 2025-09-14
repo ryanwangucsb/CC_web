@@ -1161,10 +1161,23 @@ const App = () => {
 
   // Replace useEffect for products and orders with real API calls
   useEffect(() => {
+    console.log('Fetching products from:', API_ENDPOINTS.PRODUCTS);
     fetch(API_ENDPOINTS.PRODUCTS)
-      .then(res => res.json())
-      .then(data => dispatch({ type: 'SET_PRODUCTS', payload: data }))
-      .catch(() => dispatch({ type: 'SET_PRODUCTS', payload: [] }));
+      .then(res => {
+        console.log('Products response status:', res.status);
+        if (!res.ok) {
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then(data => {
+        console.log('Products data received:', data);
+        dispatch({ type: 'SET_PRODUCTS', payload: data });
+      })
+      .catch(error => {
+        console.error('Error fetching products:', error);
+        dispatch({ type: 'SET_PRODUCTS', payload: [] });
+      });
     // Temporarily disable orders fetch to avoid 404 errors
     // fetch(API_ENDPOINTS.ORDERS, {
     //   credentials: 'include',
