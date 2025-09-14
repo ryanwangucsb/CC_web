@@ -1,8 +1,8 @@
 import os
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file in the backend folder
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -14,6 +14,8 @@ ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
     '18.144.58.149',
+    'wedofarm.com',
+    'www.wedofarm.com',
 ]
 
 INSTALLED_APPS = [
@@ -88,18 +90,20 @@ STATIC_URL = '/static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# CORS settings for development
+# CORS settings for development and production
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://wedofarm.com",
+    "https://www.wedofarm.com",
 ]
 
-# Add EC2 IP/domain for testing (you can add more here)
-CORS_ALLOWED_ORIGINS.extend([
-    # Add your EC2 IP here when you have it
-    # "http://your-ec2-ip:5173",
-    # "http://your-ec2-domain:5173",
-])
+# Add production domains
+if not DEBUG:
+    CORS_ALLOWED_ORIGINS.extend([
+        "https://wedofarm.com",
+        "https://www.wedofarm.com",
+    ])
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = False

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, createContext, useContext, useReducer } from 'react';
 import { API_ENDPOINTS } from './config.js';
 import { supabase } from './supabaseClient.js';
+import { submitOrderToSheets } from './googleSheetsService.js';
 
 // Context and Reducer
 const AppContext = createContext();
@@ -56,7 +57,7 @@ const Navigation = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                 </svg>
               </div>
-              <span className="font-bold text-xl text-gray-800">GreenHarvest</span>
+              <span className="font-bold text-xl text-gray-800">C&C Farm</span>
             </div>
           </div>
 
@@ -169,10 +170,10 @@ const Hero = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center">
           <h1 className="text-4xl md:text-6xl font-bold mb-6">
-            Fresh from the Farm
+            C&C Farm
           </h1>
           <p className="text-xl md:text-2xl mb-8 opacity-90">
-            Locally grown, sustainably harvested, and delivered to your doorstep
+            Locally grown, sustainably harvested
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <a href="#products" className="bg-white text-green-600 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors">
@@ -495,65 +496,85 @@ const Cart = () => {
     }
   };
 
+  const [checkoutData, setCheckoutData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: ''
+  });
+
   const handleCheckout = () => {
     setIsCheckout(true);
-  };
+};
 
   const handlePlaceOrder = async () => {
-    try {
-      // Get the current Supabase session
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session) {
-        alert('Please log in to place an order');
-        return;
-      }
+    // Validate required fields
+    if (!checkoutData.name || !checkoutData.email || !checkoutData.phone || !checkoutData.address) {
+      alert('Please fill in all required fields (name, email, phone, and address)');
+      return;
+    }
 
-      const response = await fetch(API_ENDPOINTS.ORDERS_CREATE, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          items: state.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
-        })
-      });
+    try {
+      // Calculate total
+      const total = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+      // Prepare order data for Google Sheets
+      const orderData = {
+        name: checkoutData.name,
+        email: checkoutData.email,
+        phone: checkoutData.phone,
+        address: checkoutData.address,
+        items: state.cart,
+        total: total
+      };
+
+      // Submit order to Google Sheets
+      const result = await submitOrderToSheets(orderData);
       
-      const data = await response.json();
-      
-      if (data.error) {
-        alert('Order failed: ' + data.error);
-      } else {
+      if (result.success) {
+        // Also update inventory in Django backend
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            await fetch(API_ENDPOINTS.ORDERS_CREATE, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'Authorization': `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                items: state.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
+              })
+            });
+          }
+        } catch (inventoryError) {
+          console.error('Inventory update failed:', inventoryError);
+          // Don't fail the order if inventory update fails
+        }
+        
         alert('Order placed successfully! Thank you for your purchase.');
         
-        // Clear cart from Supabase
-        const { error } = await supabase
-          .from('cart_items')
-          .delete()
-          .eq('user_id', state.user.id);
-        
-        if (error) {
-          console.error('Error clearing cart:', error);
+        // Clear cart from Supabase (if user is logged in)
+        if (state.user) {
+          const { error } = await supabase
+            .from('cart_items')
+            .delete()
+            .eq('user_id', state.user.id);
+          
+          if (error) {
+            console.error('Error clearing cart:', error);
+          }
         }
         
         // Clear local cart state
         dispatch({ type: 'CLEAR_CART' });
         setIsCheckout(false);
         
-        // Optionally refresh orders
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          fetch(API_ENDPOINTS.ORDERS, { 
-            headers: { 
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`
-            } 
-          })
-            .then(res => res.json())
-            .then(data => dispatch({ type: 'SET_ORDERS', payload: data }));
-        }
+        // Reset checkout form
+        setCheckoutData({ name: '', email: '', phone: '', address: '' });
+      } else {
+        alert('Order failed: ' + result.error);
       }
     } catch (err) {
       console.error('Order failed:', err);
@@ -609,19 +630,47 @@ const Cart = () => {
             
             <div className="grid md:grid-cols-2 gap-8">
               <div>
-                <h3 className="text-xl font-semibold mb-6">Shipping Information</h3>
+                <h3 className="text-xl font-semibold mb-6">Customer Information</h3>
                 <form className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                    <input type="text" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
+                    <input 
+                      type="text" 
+                      value={checkoutData.name}
+                      onChange={(e) => setCheckoutData({...checkoutData, name: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" 
+                      required
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <input type="email" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                    <input 
+                      type="email" 
+                      value={checkoutData.email}
+                      onChange={(e) => setCheckoutData({...checkoutData, email: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" 
+                      required
+                    />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                    <input type="tel" className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number *</label>
+                    <input 
+                      type="tel" 
+                      value={checkoutData.phone}
+                      onChange={(e) => setCheckoutData({...checkoutData, phone: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" 
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Address *</label>
+                    <textarea 
+                      value={checkoutData.address}
+                      onChange={(e) => setCheckoutData({...checkoutData, address: e.target.value})}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" 
+                      rows="3"
+                      required
+                    />
                   </div>
                 </form>
               </div>
@@ -649,7 +698,7 @@ const Cart = () => {
                     onClick={handlePlaceOrder}
                     className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold mt-6 hover:bg-green-700 transition-colors"
                   >
-                    Place Order
+                    Submit Order Request
                   </button>
                 </div>
               </div>
@@ -1033,29 +1082,11 @@ const Footer = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
                 </svg>
               </div>
-              <span className="font-bold text-xl">GreenHarvest</span>
+              <span className="font-bold text-xl">C&C Farm</span>
             </div>
             <p className="text-gray-300 mb-4">
-              Bringing fresh, locally grown produce from our farm to your table. 
-              Committed to sustainable farming practices and community wellness.
+              Locally grown, sustainably harvested
             </p>
-            <div className="flex space-x-4">
-              <a href="#" className="text-gray-300 hover:text-white transition-colors">
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616-.054 2.281 1.581 4.415 3.949 4.89-.693.188-1.452.232-2.224.084.626 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"/>
-                </svg>
-              </a>
-              <a href="#" className="text-gray-300 hover:text-white transition-colors">
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M22.46 6c-.77.35-1.6.58-2.46.69.88-.53 1.56-1.37 1.88-2.38-.83.5-1.75.85-2.72 1.05C18.37 4.5 17.26 4 16 4c-2.35 0-4.27 1.92-4.27 4.29 0 .34.04.67.11.98C8.28 9.09 5.11 7.38 3 4.79c-.37.63-.58 1.37-.58 2.15 0 1.49.75 2.81 1.91 3.56-.71 0-1.37-.2-1.95-.5v.03c0 2.08 1.48 3.82 3.44 4.21a4.22 4.22 0 0 1-1.93.07 4.28 4.28 0 0 0 4 2.98 8.521 8.521 0 0 1-5.33 1.84c-.34 0-.68-.02-1.02-.06C3.44 20.29 5.7 21 8.12 21 16 21 20.33 14.46 20.33 8.79c0-.19 0-.37-.01-.56.84-.6 1.56-1.36 2.14-2.23z"/>
-                </svg>
-              </a>
-              <a href="#" className="text-gray-300 hover:text-white transition-colors">
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.174-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.561-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.402.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.357-.629-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.498 3.146C9.57 23.828 10.737 24.009 12.017 24.009c6.624 0 11.99-5.367 11.99-11.988C24.007 5.367 18.641.001 12.017.001z"/>
-                </svg>
-              </a>
-            </div>
           </div>
           
           <div>
@@ -1071,16 +1102,14 @@ const Footer = () => {
           <div>
             <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
             <ul className="space-y-2 text-gray-300">
-              <li>123 Farm Road</li>
-              <li>Garden City, GC 12345</li>
               <li>Phone: (555) 123-4567</li>
-              <li>Email: info@greenharvest.com</li>
+              <li>Email: info@ccfarm.com</li>
             </ul>
           </div>
         </div>
         
         <div className="border-t border-gray-700 mt-8 pt-8 text-center text-gray-400">
-          <p>&copy; 2024 GreenHarvest Farm. All rights reserved.</p>
+          <p>&copy; 2024 C&C Farm. All rights reserved.</p>
         </div>
       </div>
     </footer>
