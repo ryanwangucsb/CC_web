@@ -1,4 +1,4 @@
-// Use API subdomain once DNS is configured
+// Use API subdomain once DNS is configured - updated
 export const API_BASE_URL = 'https://api.wedofarm.com';
 
 export const API_ENDPOINTS = {
