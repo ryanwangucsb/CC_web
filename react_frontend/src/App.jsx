@@ -532,29 +532,28 @@ const Cart = () => {
       const result = await submitOrderToSheets(orderData);
       
       // Always proceed with order (Google Sheets is optional)
-      // Update inventory in Django backend
+      // Update inventory in Django backend (always, regardless of login status)
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const response = await fetch(API_ENDPOINTS.ORDERS_CREATE, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-            body: JSON.stringify({
-              items: state.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
-            })
-          });
-          
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
+        console.log('Updating inventory in Django backend...');
+        const response = await fetch(API_ENDPOINTS.ORDERS_CREATE, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            items: state.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
+        console.log('Inventory updated successfully');
       } catch (inventoryError) {
         console.error('Inventory update failed:', inventoryError);
-        // Don't fail the order if inventory update fails
+        alert('Order placed but inventory update failed. Please contact support.');
       }
       
       alert('Order placed successfully! Thank you for your purchase.');
