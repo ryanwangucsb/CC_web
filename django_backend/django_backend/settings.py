@@ -96,6 +96,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "https://wedofarm.com",
     "https://www.wedofarm.com",
+    "https://api.wedofarm.com",
 ]
 
 # Add production domains
@@ -103,6 +104,7 @@ if not DEBUG:
     CORS_ALLOWED_ORIGINS.extend([
         "https://wedofarm.com",
         "https://www.wedofarm.com",
+        "https://api.wedofarm.com",
     ])
 
 # Allow Vercel domains (wildcard pattern)
