@@ -73,9 +73,10 @@ class OrderViewSet(viewsets.ModelViewSet):
         serializer.save(user=self.request.user)
 
     # Custom action to create an order with items (more complex logic)
-    @action(detail=False, methods=['post'], url_path='create-with-items')
+    @action(detail=False, methods=['post'], url_path='create-with-items', permission_classes=[permissions.AllowAny])
     def create_order_with_items(self, request):
-        user = request.user
+        # Allow anonymous orders for inventory updates
+        user = request.user if request.user.is_authenticated else None
         items_data = request.data.get('items') # Expecting a list of {product_id, quantity}
 
         if not items_data:
