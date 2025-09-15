@@ -114,7 +114,7 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = True  # Temporarily allow all origins for debugging
+CORS_ALLOW_ALL_ORIGINS = False
 
 # Supabase settings
 SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://ueyfoyrcjlrlmmzbonok.supabase.co')

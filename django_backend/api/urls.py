@@ -1,17 +1,3 @@
-from django.contrib import admin
-from django.urls import path, include
-from django.conf import settings # For media files
-from django.conf.urls.static import static # For media files
-
-urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/', include('api.urls')), # Include URLs from your API app
-]
-
-# Serve media files (product images) only in development
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import ProductViewSet, OrderViewSet, UserViewSet
