@@ -91,9 +91,23 @@ STATIC_URL = '/static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# Simplified CORS settings for troubleshooting
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS settings for production
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://wedofarm.com",
+    "https://www.wedofarm.com",
+    "https://api.wedofarm.com",
+]
+
+# Allow Vercel domains (wildcard pattern)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
+    r"^https://.*\.vercel\.dev$",
+]
+
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = False
 
 # Supabase settings
 SUPABASE_URL = os.environ.get('SUPABASE_URL', 'https://ueyfoyrcjlrlmmzbonok.supabase.co')
