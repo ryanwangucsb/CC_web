@@ -16,6 +16,7 @@ ALLOWED_HOSTS = [
     '18.144.58.149',
     'wedofarm.com',
     'www.wedofarm.com',
+    'api.wedofarm.com',
 ]
 
 INSTALLED_APPS = [
