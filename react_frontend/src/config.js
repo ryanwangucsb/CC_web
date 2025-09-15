@@ -1,5 +1,5 @@
-// Use IP address with HTTPS to avoid SSL certificate issues
-export const API_BASE_URL = 'https://18.144.58.149';
+// Use API subdomain once DNS is configured
+export const API_BASE_URL = 'https://api.wedofarm.com';
 
 export const API_ENDPOINTS = {
   PRODUCTS: `${API_BASE_URL}/api/products/`,
