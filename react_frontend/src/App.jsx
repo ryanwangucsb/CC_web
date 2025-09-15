@@ -531,51 +531,52 @@ const Cart = () => {
       // Submit order to Google Sheets
       const result = await submitOrderToSheets(orderData);
       
-      if (result.success) {
-        // Also update inventory in Django backend
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            await fetch(API_ENDPOINTS.ORDERS_CREATE, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': `Bearer ${session.access_token}`,
-              },
-              body: JSON.stringify({
-                items: state.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
-              })
-            });
-          }
-        } catch (inventoryError) {
-          console.error('Inventory update failed:', inventoryError);
-          // Don't fail the order if inventory update fails
-        }
-        
-        alert('Order placed successfully! Thank you for your purchase.');
-        
-        // Clear cart from Supabase (if user is logged in)
-        if (state.user) {
-          const { error } = await supabase
-            .from('cart_items')
-            .delete()
-            .eq('user_id', state.user.id);
+      // Always proceed with order (Google Sheets is optional)
+      // Update inventory in Django backend
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const response = await fetch(API_ENDPOINTS.ORDERS_CREATE, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({
+              items: state.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))
+            })
+          });
           
-          if (error) {
-            console.error('Error clearing cart:', error);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
           }
         }
-        
-        // Clear local cart state
-        dispatch({ type: 'CLEAR_CART' });
-        setIsCheckout(false);
-        
-        // Reset checkout form
-        setCheckoutData({ name: '', email: '', phone: '', address: '' });
-      } else {
-        alert('Order failed: ' + result.error);
+      } catch (inventoryError) {
+        console.error('Inventory update failed:', inventoryError);
+        // Don't fail the order if inventory update fails
       }
+      
+      alert('Order placed successfully! Thank you for your purchase.');
+      
+      // Clear cart from Supabase (if user is logged in)
+      if (state.user) {
+        const { error } = await supabase
+          .from('cart_items')
+          .delete()
+          .eq('user_id', state.user.id);
+        
+        if (error) {
+          console.error('Error clearing cart:', error);
+        }
+      }
+      
+      // Clear local cart state
+      dispatch({ type: 'CLEAR_CART' });
+      setIsCheckout(false);
+      
+      // Reset checkout form
+      setCheckoutData({ name: '', email: '', phone: '', address: '' });
     } catch (err) {
       console.error('Order failed:', err);
       alert('Order failed: Network error');
