@@ -235,7 +235,7 @@ const ProductCard = ({ product, onAddToCart }) => {
   );
 };
 
-const ProductGrid = () => {
+const ProductGrid = ({ onAddToCart }) => {
   const { state, dispatch } = useContext(AppContext);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -310,7 +310,7 @@ const ProductGrid = () => {
               <ProductCard 
                 key={product.id} 
                 product={product} 
-                onAddToCart={handleAddToCart}
+                onAddToCart={onAddToCart}
               />
             ))}
           </div>
@@ -1221,7 +1221,7 @@ const App = () => {
     console.log('Current page:', currentPage); // Debug log
     switch (currentPage) {
       case 'products':
-        return <ProductGrid />;
+        return <ProductGrid onAddToCart={handleAddToCart} />;
       case 'cart':
         return <Cart />;
       case 'login':
@@ -1232,7 +1232,7 @@ const App = () => {
         return (
           <>
             <Hero />
-            <ProductGrid />
+            <ProductGrid onAddToCart={handleAddToCart} />
           </>
         );
     }
