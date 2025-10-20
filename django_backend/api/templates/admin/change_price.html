@@ -1,0 +1,39 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label='api' %}">{% trans 'Api' %}</a>
+&rsaquo; <a href="{% url 'admin:api_products_changelist' %}">{% trans 'Products' %}</a>
+&rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>{{ title }}</h1>
+
+<p>You have selected {{ products|length }} product{{ products|length|pluralize }}:</p>
+
+<ul>
+{% for product in products %}
+    <li>{{ product.name }} - Current Price: ${{ product.price }}</li>
+{% endfor %}
+</ul>
+
+<form method="post">
+    {% csrf_token %}
+    <div>
+        <label for="new_price">New Price:</label>
+        <input type="number" id="new_price" name="new_price" step="0.01" min="0" required>
+    </div>
+    <div>
+        <input type="hidden" name="post" value="yes">
+        <input type="submit" value="Update Price">
+        <a href="{% url 'admin:api_products_changelist' %}" class="button cancel-link">Cancel</a>
+    </div>
+</form>
+
+{% endblock %}

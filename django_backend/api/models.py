@@ -9,6 +9,10 @@ class products(models.Model):
     stock_quantity = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        verbose_name = "Product"
+        verbose_name_plural = "Products"
+
     def __str__(self):
         return self.name
 
