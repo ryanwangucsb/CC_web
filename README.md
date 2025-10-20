@@ -5,8 +5,6 @@ A modern, full-stack e-commerce website for C&C Farm, featuring locally grown pr
 ## 🚀 Live Demo
 
 - **Website**: [https://www.wedofarm.com](https://www.wedofarm.com)
-- **API**: [https://api.wedofarm.com](https://api.wedofarm.com)
-- **Admin Panel**: [https://api.wedofarm.com/admin](https://api.wedofarm.com/admin)
 
 ## 📋 Table of Contents
 
