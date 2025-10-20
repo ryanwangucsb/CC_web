@@ -12,8 +12,13 @@ def change_price_action(modeladmin, request, queryset):
         if new_price:
             try:
                 price = float(new_price)
-                updated = queryset.update(price=price)
-                modeladmin.message_user(request, f'Successfully updated price for {updated} products.', messages.SUCCESS)
+                # Update each product individually to ensure proper saving
+                updated_count = 0
+                for product in queryset:
+                    product.price = price
+                    product.save()
+                    updated_count += 1
+                modeladmin.message_user(request, f'Successfully updated price for {updated_count} products.', messages.SUCCESS)
             except ValueError:
                 modeladmin.message_user(request, 'Invalid price format. Please enter a valid number.', messages.ERROR)
         return HttpResponseRedirect(request.get_full_path())
@@ -31,8 +36,13 @@ def change_stock_action(modeladmin, request, queryset):
         if new_stock:
             try:
                 stock = int(new_stock)
-                updated = queryset.update(stock_quantity=stock)
-                modeladmin.message_user(request, f'Successfully updated stock for {updated} products.', messages.SUCCESS)
+                # Update each product individually to ensure proper saving
+                updated_count = 0
+                for product in queryset:
+                    product.stock_quantity = stock
+                    product.save()
+                    updated_count += 1
+                modeladmin.message_user(request, f'Successfully updated stock for {updated_count} products.', messages.SUCCESS)
             except ValueError:
                 modeladmin.message_user(request, 'Invalid stock format. Please enter a valid number.', messages.ERROR)
         return HttpResponseRedirect(request.get_full_path())
