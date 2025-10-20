@@ -1,5 +1,5 @@
-// Use API subdomain once DNS is configured - updated
-export const API_BASE_URL = 'https://api.wedofarm.com';
+// Use environment variable for API base URL
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.wedofarm.com';
 
 export const API_ENDPOINTS = {
   PRODUCTS: `${API_BASE_URL}/api/products/`,

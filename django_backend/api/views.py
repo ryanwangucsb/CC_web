@@ -18,21 +18,21 @@ class SupabaseDRFAuthentication(BaseAuthentication):
         # Get the Authorization header
         auth_header = request.META.get('HTTP_AUTHORIZATION', '')
         
-        print(f"DEBUG: Auth header: {auth_header}")
+        # Debug: Auth header logging removed for production
         
         if not auth_header.startswith('Bearer '):
-            print("DEBUG: No Bearer token found")
+            # Debug: No Bearer token found
             return None
             
         # Extract the token
         token = auth_header.split(' ')[1]
-        print(f"DEBUG: Token extracted: {token[:20]}...")
+        # Debug: Token extracted
         
         # Use our custom auth backend to validate the token
         supabase_backend = SupabaseAuthBackend()
         user = supabase_backend.authenticate(request, token=token)
         
-        print(f"DEBUG: User from auth: {user}")
+        # Debug: User from auth
         
         if user:
             return (user, None)

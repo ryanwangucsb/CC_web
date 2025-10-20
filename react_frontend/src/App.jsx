@@ -527,7 +527,7 @@ const Cart = () => {
       // Always proceed with order (Google Sheets is optional)
       // Update inventory in Django backend (always, regardless of login status)
       try {
-        console.log('Updating inventory in Django backend...');
+        // Debug: Updating inventory in Django backend...
         const response = await fetch(API_ENDPOINTS.ORDERS_CREATE, {
           method: 'POST',
           headers: {
@@ -543,7 +543,7 @@ const Cart = () => {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
         
-        console.log('Inventory updated successfully');
+        // Debug: Inventory updated successfully
       } catch (inventoryError) {
         console.error('Inventory update failed:', inventoryError);
         alert('Order placed but inventory update failed. Please contact support.');
@@ -1220,17 +1220,17 @@ const App = () => {
 
   // Replace useEffect for products and orders with real API calls
   useEffect(() => {
-    console.log('Fetching products from:', API_ENDPOINTS.PRODUCTS);
+    // Debug: Fetching products from API
     fetch(API_ENDPOINTS.PRODUCTS)
       .then(res => {
-        console.log('Products response status:', res.status);
+        // Debug: Products response status
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
         return res.json();
       })
       .then(data => {
-        console.log('Products data received:', data);
+        // Debug: Products data received
         dispatch({ type: 'SET_PRODUCTS', payload: data });
       })
       .catch(error => {
@@ -1268,7 +1268,7 @@ const App = () => {
   }, []);
 
   const renderPage = () => {
-    console.log('Current page:', currentPage); // Debug log
+    // Debug: Current page
     switch (currentPage) {
       case 'products':
         return <ProductGrid onAddToCart={handleAddToCart} />;
