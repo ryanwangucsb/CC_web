@@ -437,8 +437,8 @@ const Cart = () => {
       // Find the product to check stock availability
       const cartItem = state.cart.find(item => item.id === id);
       if (cartItem && quantity > cartItem.stock_quantity) {
-        alert(`Only ${cartItem.stock_quantity} items available in stock`);
-        return;
+        // Automatically limit to stock quantity instead of showing alert
+        quantity = cartItem.stock_quantity;
       }
       
       try {
@@ -713,7 +713,18 @@ const Cart = () => {
                         >
                           -
                         </button>
-                        <span className="px-4 py-1 border-t border-b text-center">{item.quantity}</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max={item.stock_quantity}
+                          value={item.quantity}
+                          onChange={(e) => {
+                            const newQuantity = parseInt(e.target.value) || 1;
+                            const limitedQuantity = Math.min(Math.max(newQuantity, 1), item.stock_quantity);
+                            handleUpdateQuantity(item.id, limitedQuantity);
+                          }}
+                          className="px-2 py-1 border-t border-b text-center w-16 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        />
                         <button
                           onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
                           disabled={item.quantity >= item.stock_quantity}
