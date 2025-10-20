@@ -324,6 +324,7 @@ const ProductGrid = ({ onAddToCart }) => {
 const Cart = () => {
   const { state, dispatch } = useContext(AppContext);
   const [isCheckout, setIsCheckout] = useState(false);
+  const [quantityInputs, setQuantityInputs] = useState({});
   const [loading, setLoading] = useState(false);
 
   // Load cart from Supabase when component mounts (only if user is logged in)
@@ -454,10 +455,38 @@ const Cart = () => {
         }
         
         dispatch({ type: 'UPDATE_QUANTITY', payload: { id, quantity } });
+        // Update the input value to match the actual quantity
+        setQuantityInputs(prev => ({ ...prev, [id]: quantity.toString() }));
       } catch (err) {
         console.error('Error updating quantity:', err);
       }
     }
+  };
+
+  const handleQuantityInputChange = (id, value) => {
+    // Allow empty string for clearing the input
+    setQuantityInputs(prev => ({ ...prev, [id]: value }));
+  };
+
+  const handleQuantityInputBlur = (id, value) => {
+    const cartItem = state.cart.find(item => item.id === id);
+    if (!cartItem) return;
+
+    let newQuantity;
+    if (value === '' || value === '0') {
+      // If empty or 0, set to 1
+      newQuantity = 1;
+    } else {
+      newQuantity = parseInt(value) || 1;
+      // Limit to stock quantity
+      newQuantity = Math.min(Math.max(newQuantity, 1), cartItem.stock_quantity);
+    }
+    
+    handleUpdateQuantity(id, newQuantity);
+  };
+
+  const getQuantityInputValue = (id) => {
+    return quantityInputs[id] !== undefined ? quantityInputs[id] : state.cart.find(item => item.id === id)?.quantity?.toString() || '1';
   };
 
   const [checkoutData, setCheckoutData] = useState({
@@ -717,12 +746,9 @@ const Cart = () => {
                           type="number"
                           min="1"
                           max={item.stock_quantity}
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const newQuantity = parseInt(e.target.value) || 1;
-                            const limitedQuantity = Math.min(Math.max(newQuantity, 1), item.stock_quantity);
-                            handleUpdateQuantity(item.id, limitedQuantity);
-                          }}
+                          value={getQuantityInputValue(item.id)}
+                          onChange={(e) => handleQuantityInputChange(item.id, e.target.value)}
+                          onBlur={(e) => handleQuantityInputBlur(item.id, e.target.value)}
                           className="px-2 py-1 border-t border-b text-center w-16 focus:outline-none focus:ring-2 focus:ring-green-500"
                         />
                         <button
