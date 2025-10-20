@@ -53,20 +53,16 @@ def change_stock_action(modeladmin, request, queryset):
         'title': 'Change Stock Quantity'
     })
 
+# Set action descriptions
+change_price_action.short_description = "Change price of selected products"
+change_stock_action.short_description = "Change stock quantity of selected products"
+
 @admin.register(products)
 class ProductAdmin(admin.ModelAdmin):
     list_display = ['name', 'price', 'stock_quantity', 'created_at']
     list_filter = ['created_at']
     search_fields = ['name', 'description']
     actions = [change_price_action, change_stock_action]
-    
-    def get_urls(self):
-        urls = super().get_urls()
-        custom_urls = [
-            path('change-price/', self.admin_site.admin_view(change_price_action), name='change_price'),
-            path('change-stock/', self.admin_site.admin_view(change_stock_action), name='change_stock'),
-        ]
-        return custom_urls + urls
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
