@@ -44,6 +44,7 @@ const Navigation = () => {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     dispatch({ type: 'SET_USER', payload: null });
+    dispatch({ type: 'CLEAR_CART' }); // Clear cart when logging out
   };
 
   return (
@@ -433,6 +434,13 @@ const Cart = () => {
 
   const handleUpdateQuantity = async (id, quantity) => {
     if (quantity >= 1) {
+      // Find the product to check stock availability
+      const cartItem = state.cart.find(item => item.id === id);
+      if (cartItem && quantity > cartItem.stock_quantity) {
+        alert(`Only ${cartItem.stock_quantity} items available in stock`);
+        return;
+      }
+      
       try {
         const { error } = await supabase
           .from('cart_items')
@@ -708,7 +716,12 @@ const Cart = () => {
                         <span className="px-4 py-1 border-t border-b text-center">{item.quantity}</span>
                         <button
                           onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                          className="bg-gray-200 hover:bg-gray-300 rounded-r-lg px-3 py-1 text-gray-700"
+                          disabled={item.quantity >= item.stock_quantity}
+                          className={`rounded-r-lg px-3 py-1 ${
+                            item.quantity >= item.stock_quantity 
+                              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                              : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                          }`}
                         >
                           +
                         </button>
