@@ -251,47 +251,55 @@ const ProductGrid = () => {
   });
 
   const handleAddToCart = async (product) => {
-    if (product.stock_quantity > 0 && state.user) {
-      try {
-        // Check if item already exists in cart
-        const existingItem = state.cart.find(item => item.id === product.id);
+    if (product.stock_quantity === 0) {
+      return; // Don't allow adding out of stock items
+    }
+    
+    if (!state.user) {
+      // Redirect to login if not authenticated
+      setCurrentPage('login');
+      return;
+    }
+    
+    try {
+      // Check if item already exists in cart
+      const existingItem = state.cart.find(item => item.id === product.id);
+      
+      if (existingItem) {
+        // Update quantity in Supabase
+        const { error } = await supabase
+          .from('cart_items')
+          .update({ quantity: existingItem.quantity + 1 })
+          .eq('user_id', state.user.id)
+          .eq('product_id', product.id);
         
-        if (existingItem) {
-          // Update quantity in Supabase
-          const { error } = await supabase
-            .from('cart_items')
-            .update({ quantity: existingItem.quantity + 1 })
-            .eq('user_id', state.user.id)
-            .eq('product_id', product.id);
-          
-          if (error) {
-            console.error('Error updating cart:', error);
-            return;
-          }
-          
-          // Update local state
-          dispatch({ type: 'UPDATE_QUANTITY', payload: { id: product.id, quantity: existingItem.quantity + 1 } });
-        } else {
-          // Add new item to Supabase
-          const { error } = await supabase
-            .from('cart_items')
-            .insert({
-              user_id: state.user.id,
-              product_id: product.id,
-              quantity: 1
-            });
-          
-          if (error) {
-            console.error('Error adding to cart:', error);
-            return;
-          }
-          
-          // Add to local state
-          dispatch({ type: 'ADD_TO_CART', payload: product });
+        if (error) {
+          console.error('Error updating cart:', error);
+          return;
         }
-      } catch (err) {
-        console.error('Error adding to cart:', err);
+        
+        // Update local state
+        dispatch({ type: 'UPDATE_QUANTITY', payload: { id: product.id, quantity: existingItem.quantity + 1 } });
+      } else {
+        // Add new item to Supabase
+        const { error } = await supabase
+          .from('cart_items')
+          .insert({
+            user_id: state.user.id,
+            product_id: product.id,
+            quantity: 1
+          });
+        
+        if (error) {
+          console.error('Error adding to cart:', error);
+          return;
+        }
+        
+        // Add to local state
+        dispatch({ type: 'ADD_TO_CART', payload: product });
       }
+    } catch (err) {
+      console.error('Error adding to cart:', err);
     }
   };
 
