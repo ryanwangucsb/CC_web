@@ -13,12 +13,6 @@ A modern, full-stack e-commerce website for C&C Farm, featuring locally grown pr
 - [Features](#-features)
 - [Tech Stack](#-tech-stack)
 - [Project Structure](#-project-structure)
-- [Installation](#-installation)
-- [Configuration](#-configuration)
-- [Deployment](#-deployment)
-- [API Documentation](#-api-documentation)
-- [Contributing](#-contributing)
-- [License](#-license)
 
 ## ✨ Features
 
