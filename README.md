@@ -98,5 +98,9 @@ ccwebsite/
 - **Ryan Wang** - Full Stack Developer
   - GitHub: [@ryanwangucsb](https://github.com/ryanwangucsb)
   - Email: ryanwang@ucsb.edu
+- **Vishruth Narasimhan** - Full Stack Developer
+  - GitHub: [@wishruth](https://github.com/wishruth)
+  - Email: vinarasi@ucsc.edu, wishruth@gmail.com
+  
 
 **Built with ❤️ for C&C Farm** 🌱
